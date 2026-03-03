@@ -74,20 +74,21 @@ const DEVICE_INFO = [
 
 // THERMOSTAT (COMMAND)
     {
-        // 헤더의 3번째 바이트를 09에서 0E(14바이트)로 반드시 수정해야 합니다.
-        device: "thermostat", header: "02210E01", length: 14, request: "set",
+        // 도엽님 로그에 따라 길이를 9로, 헤더를 02210901로 설정합니다.
+        device: "thermostat", header: "02210901", length: 9, request: "set",
         setPropertyToMsg: (buf, rom, idx, val) => {
-            // 방 번호를 5번째 바이트(index 4)에 할당합니다.
-            buf[4] = parseInt(rom, 10); 
+            // buf[4]는 타임스탬프(카운터)가 자동으로 들어갑니다.
+            buf[5] = parseInt(rom, 10); // 방 번호 (5)
 
             if (idx === "power") {
-                // 전원 제어: 6번째 바이트(index 5)에 켜짐(0x01), 꺼짐(0x02)을 넣습니다.
-                buf[5] = (val === "heat" ? 0x01 : 0x02);
+                // 도엽님 규격: 00은 ON(heat), 02는 OFF입니다.
+                buf[6] = (val === "heat" ? 0x00 : 0x02);
+                buf[7] = 23; // 전원 조작 시 기본 온도 23도 설정
             } else {
-                // 온도 조절: 8번째 바이트(index 7)에 설정 온도를 넣습니다.
-                buf[7] = parseInt(val, 10);
+                // 온도 조절
+                buf[6] = 0x00; // 온도 조절 시 전원은 ON으로 유지
+                buf[7] = parseInt(val, 10); // 목표 온도
             }
-            // 나머지 바이트는 00으로 채워지며, 마지막 체크섬은 자동으로 계산됩니다.
             return buf;
         }
     },
@@ -165,25 +166,14 @@ const DEVICE_INFO = [
   
 // THERMOSTAT (STATE)
     {
-        // 02210E90 패킷만 개별 방 난방 상태 패킷입니다.
-        device: "thermostat", header: ["02210E90"], length: 14, request: "ack",
+        device: "thermostat", header: ["02210E81", "02210E90", "02210E92"], length: 14, request: "ack",
         parseToProperty: (buf) => {
-            // buf[6]이 진짜 방 번호입니다 (예: 1, 2, 5 등)
-            let roomId = buf[6].toString(); 
-
-            // buf[8]은 [난방 켜짐/꺼짐 비트(0x40)] + [설정 온도] 로 이루어져 있습니다.
-            let targetTemp = buf[8] & 0x3F; // 0x3F(63)을 & 연산하여 온도 숫자만 추출
-            let powerState = (buf[8] & 0x40) ? "heat" : "off"; // 0x40(64) 비트가 있으면 난방 켜짐
-
-            // buf[9]는 현재 온도입니다.
-            let currentTemp = buf[9];
-
             return {
-                device: "thermostat", room: roomId,
+                device: "thermostat", room: buf[6].toString(), // 방 번호 위치 index 6
                 value: { 
-                    "power": powerState, 
-                    "target": targetTemp, 
-                    "current": currentTemp 
+                    "power": (buf[7] === 0) ? "heat" : "off", // 전원 상태 index 7
+                    "current": buf[8], // 현재 온도 index 8
+                    "target": buf[9]   // 목표 온도 index 9
                 }
             };
         }
@@ -546,9 +536,9 @@ class BestinRS485 {
         this.lastReceivedTimestamp = new Date();
         this.isCommandIndex = false;
 
-        //if (packet[0] === 0x02) {
-        //    this.synchronizedTime = this.lastReceivedTimestamp;
-        //}
+        if (packet[0] === 0x02 && packet[1] === 0x21 && packet.length === 7) {
+            this.controlPacketTimeStamp = [packet[3], packet[4]];
+        }
         if (!this.isCommandIndex && packet.slice(2, 4).toString("hex") === "1491") {
             this.setCommandBufferIndex = 1;
             logger.debug(`All-in-one Gateway - Index: ${this.setCommandBufferIndex}, Packet Slice: ${packet.slice(2, 4).toString("hex")}`);
@@ -1145,6 +1135,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
