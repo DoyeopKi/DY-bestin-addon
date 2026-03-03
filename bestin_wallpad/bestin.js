@@ -175,7 +175,7 @@ const DEVICE_INFO = [
             const roomId = buf[6].toString(); 
 
             // 전원 상태: index 7이 00이면 ON, 02이면 OFF입니다.
-            const powerState = (buf[7] !== 0x00) ? "heat" : "off";
+            const powerState = (buf[7] === 0x00) ? "heat" : "off";
 
             // 현재 온도: index 8에 있습니다. 
             // 단, 난방이 켜져 있을 때는 온도 값에 0x40(64)이 더해져서 옵니다 (예: 23도 -> 57 hex).
@@ -1154,6 +1154,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
