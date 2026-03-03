@@ -156,13 +156,25 @@ const DEVICE_INFO = [
         }
     },
 
+  
     // THERMOSTAT
     {
-        device: "thermostat", header: "02281091", length: 16, request: "ack",
+        // length (14) 변경,  header "02210E81", "02210E90", "02210E92"
+        device: "thermostat", header: ["02210E81", "02210E90", "02210E92"], length: 14, request: "ack",
         parseToProperty: (buf) => {
+            //방 번호 
+            let roomId = buf[4].toString(16); 
+            
+            // 온도 데이터가 buf[8]과 buf[9]에 위치 (16진수 17은 10진수 23)
+            let currentTemp = buf[8]; // 현재 온도
+            let targetTemp = buf[9];  // 설정 온도
+            
+            // 전원 상태는 buf[7] 또는 패킷 종류에 따라 결정 (임시로 targetTemp가 0보다 크면 heat로 처리)
+            let powerState = (targetTemp > 0 && targetTemp <= 40) ? "heat" : "off"; 
+
             return {
-                device: "thermostat", room: buf[5] & 0x0F,
-                value: { "power": (buf[6] & 0x01) ? "heat" : "off", "target": (buf[7] & 0x3F) + ((buf[7] & 0x40) && 0.5), "current": ((buf[8] << 8) + buf[9]) / 10.0 }
+                device: "thermostat", room: roomId,
+                value: { "power": powerState, "target": targetTemp, "current": currentTemp }
             };
         }
     },
