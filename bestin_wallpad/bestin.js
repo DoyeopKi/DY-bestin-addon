@@ -74,25 +74,23 @@ const DEVICE_INFO = [
 
 // THERMOSTAT (COMMAND)
     {
-        device: "thermostat", header: "02210901", length: 14, request: "set",
+        // 헤더의 3번째 바이트를 09에서 0E(14바이트)로 반드시 수정해야 합니다.
+        device: "thermostat", header: "02210E01", length: 14, request: "set",
         setPropertyToMsg: (buf, rom, idx, val) => {
-            // 도엽님 댁 패킷 규격: 방 번호는 index 5에 위치합니다.
-            buf[5] = parseInt(rom, 10); 
+            // 방 번호를 5번째 바이트(index 4)에 할당합니다.
+            buf[4] = parseInt(rom, 10); 
 
             if (idx === "power") {
-                // 전원 제어: 9번째 바이트(index 8)에 전원 비트(0x40)와 온도를 합쳐서 보냅니다.
-                // 켜짐(heat)이면 0x40을 더하고, 꺼짐이면 온도값만 보냅니다.
-                let targetTemp = 23; // 기본 온도 설정
-                buf[8] = (val === "heat") ? (0x40 | targetTemp) : targetTemp;
+                // 전원 제어: 6번째 바이트(index 5)에 켜짐(0x01), 꺼짐(0x02)을 넣습니다.
+                buf[5] = (val === "heat" ? 0x01 : 0x02);
             } else {
-                // 온도 조절: 9번째 바이트(index 8)에 설정 온도를 직접 넣습니다.
-                buf[8] = parseInt(val, 10);
+                // 온도 조절: 8번째 바이트(index 7)에 설정 온도를 넣습니다.
+                buf[7] = parseInt(val, 10);
             }
-            // 마지막 체크섬은 하단 공통 함수에서 자동으로 계산됩니다.
+            // 나머지 바이트는 00으로 채워지며, 마지막 체크섬은 자동으로 계산됩니다.
             return buf;
         }
     },
-
     // FAN
     {
         device: "fan", header: "026100", length: 10, request: "set",
@@ -1147,6 +1145,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
