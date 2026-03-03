@@ -72,15 +72,19 @@ const DEVICE_INFO = [
         }
     },
 
-    // THERMOSTAT
+// THERMOSTAT (COMMAND)
     {
-        device: "thermostat", header: "02280E12", length: 14, request: "set",
+        device: "thermostat", header: "02210901", length: 14, request: "set",
         setPropertyToMsg: (buf, rom, idx, val) => {
-            let value = parseFloat(val), vInt = parseInt(value), vFloat = value - vInt;
-
-            buf[5] = rom & 0x0F;
-            if (idx === "power") buf[6] = (val === "heat" ? 0x01 : 0x02);
-            else buf[7] = ((vInt & 0xFF) | ((vFloat != 0) ? 0x40 : 0x00));
+            // 방 번호를 헥사값으로 변환하여 5번째 바이트에 넣습니다.
+            buf[4] = parseInt(rom, 16);
+            if (idx === "power") {
+                buf[5] = (val === "heat" ? 0x01 : 0x02);
+            } else {
+                // 온도를 8번째와 9번째 바이트 등에 적절히 배치 (패킷 분석에 따라 조정 필요)
+                buf[8] = parseInt(val);
+                buf[9] = parseInt(val);
+            }
             return buf;
         }
     },
@@ -157,24 +161,27 @@ const DEVICE_INFO = [
     },
 
   
-    // THERMOSTAT
+   // THERMOSTAT (STATE)
     {
-        // length (14) 변경,  header "02210E81", "02210E90", "02210E92"
+        // 도엽님 패킷의 헤더인 02210E81, 02210E90, 02210E92를 모두 허용합니다.
         device: "thermostat", header: ["02210E81", "02210E90", "02210E92"], length: 14, request: "ack",
         parseToProperty: (buf) => {
-            //방 번호 
+            // buf[4]에 위치한 방 번호를 헥사 문자열(ea, eb 등)로 읽어옵니다.
             let roomId = buf[4].toString(16); 
+            // buf[8]은 현재 온도, buf[9]는 설정 온도입니다.
+            let currentTemp = buf[8]; 
+            let targetTemp = buf[9];
             
-            // 온도 데이터가 buf[8]과 buf[9]에 위치 (16진수 17은 10진수 23)
-            let currentTemp = buf[8]; // 현재 온도
-            let targetTemp = buf[9];  // 설정 온도
-            
-            // 전원 상태는 buf[7] 또는 패킷 종류에 따라 결정 (임시로 targetTemp가 0보다 크면 heat로 처리)
-            let powerState = (targetTemp > 0 && targetTemp <= 40) ? "heat" : "off"; 
+            // 설정 온도가 0보다 크면 '난방 중(heat)', 아니면 '꺼짐(off)'으로 간주합니다.
+            let powerState = (targetTemp > 0 && targetTemp <= 40) ? "heat" : "off";
 
             return {
                 device: "thermostat", room: roomId,
-                value: { "power": powerState, "target": targetTemp, "current": currentTemp }
+                value: { 
+                    "power": powerState, 
+                    "target": targetTemp, 
+                    "current": currentTemp 
+                }
             };
         }
     },
@@ -1135,3 +1142,4 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
