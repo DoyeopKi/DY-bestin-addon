@@ -72,25 +72,26 @@ const DEVICE_INFO = [
         }
     },
 
-// THERMOSTAT (COMMAND) - 전원(01)과 온도(02) 명령을 분리합니다.
+// THERMOSTAT (COMMAND)
     {
         device: "thermostat", header: "02210901", length: 9, request: "set",
-        setPropertyToMsg: (buf, rom, idx, val) => {
-            buf[5] = parseInt(rom, 10); // 방 번호
+        setPropertyToMsg: (buf, rom, idx, val, cache) => {
+            buf[5] = parseInt(rom, 10); 
+
+            // 캐시에서 현재 방의 전원과 설정 온도를 가져옵니다. (없으면 기본값 off, 23도)
+            const currentPower = cache ? (cache["thermostat" + rom + "power"] || "off") : "off";
+            const currentTemp = cache ? (cache["thermostat" + rom + "target"] || 23) : 23;
 
             if (idx === "power") {
-                // 전원 제어 명령: 타입은 01, 값은 ON(01) 또는 OFF(00)
-                buf[6] = 0x01; 
-                buf[7] = (val === "heat" ? 0x01 : 0x00); 
+                buf[6] = (val === "heat" ? 0x00 : 0x02); // 00: ON, 02: OFF
+                buf[7] = currentTemp; // 전원을 켜고 끌 때, 기존 설정 온도를 그대로 유지
             } else {
-                // 온도 조절 명령: 타입은 02, 값은 온도 숫자
-                buf[6] = 0x02; 
+                buf[6] = (currentPower === "heat" ? 0x00 : 0x02); // 온도를 조절할 때, 기존 전원 상태 유지
                 buf[7] = parseInt(val, 10); 
             }
             return buf;
         }
     },
-
     
     // FAN
     {
@@ -166,31 +167,24 @@ const DEVICE_INFO = [
   
 // THERMOSTAT (STATE/ACK)
     {
-        // 02210E90(정기 보고)과 02210E81(명령 응답) 헤더를 모두 수용합니다.
         device: "thermostat", header: ["02210E81", "02210E90"], length: 14, request: "ack",
         parseToProperty: (buf) => {
-            // 도엽님 로그 분석 결과: 방 번호는 index 6에 있습니다.
             const roomId = buf[6].toString(); 
 
-            // 전원 상태: index 7이 00이면 ON, 02이면 OFF입니다.
-            const powerState = (buf[7] !== 0x00) ? "heat" : "off";
+            // 00이 켜짐(heat), 그 외(02 등)는 꺼짐(off)으로 정확히 매칭합니다.
+            const powerState = (buf[7] === 0x00) ? "heat" : "off";
 
-            // 현재 온도: index 8에 있습니다. 
-            // 단, 난방이 켜져 있을 때는 온도 값에 0x40(64)이 더해져서 옵니다 (예: 23도 -> 57 hex).
             let currentTemp = buf[8];
             if (currentTemp >= 0x40) {
-                currentTemp -= 0x40; // 0x40 비트마스크 제거하여 순수 온도 추출
+                currentTemp -= 0x40; 
             }
-
-            // 목표 온도: index 9에 있습니다.
-            const targetTemp = buf[9];
 
             return {
                 device: "thermostat", room: roomId,
                 value: { 
                     "power": powerState, 
                     "current": currentTemp, 
-                    "target": targetTemp 
+                    "target": buf[9] 
                 }
             };
         }
@@ -754,7 +748,7 @@ class BestinRS485 {
         const devInfoHeader = Array.isArray(deviceInfo.header) ? deviceInfo.header[this.setCommandBufferIndex] : deviceInfo.header;
         const devInfoLength = Array.isArray(deviceInfo.length) ? deviceInfo.length[this.setCommandBufferIndex] : deviceInfo.length;
 
-        const headerBuffer = Buffer.from(devInfoHeader + timeStamp.toString(16), "hex");
+        const headerBuffer = Buffer.from(devInfoHeader + timeStamp.toString(16).padStart(2, '0'), "hex");
         const restBuffer = Buffer.alloc(devInfoLength - headerBuffer.length);
         const commandBuffer = this.createCommandBuffer(headerBuffer, restBuffer, deviceInfo, room, name, value);
 
@@ -763,9 +757,11 @@ class BestinRS485 {
         this.addCommandToQueue(commandBuffer, device, room, name, value, callback);
     }
 
+ 
     createCommandBuffer(headerBuffer, restBuffer, deviceInfo, room, name, value) {
         const commandBuffer = Buffer.concat([headerBuffer, restBuffer]);
-        deviceInfo.setPropertyToMsg(commandBuffer, room, name, value);
+        // this.deviceStatusCache 를 추가로 전달합니다.
+        deviceInfo.setPropertyToMsg(commandBuffer, room, name, value, this.deviceStatusCache);
         return commandBuffer;
     }
 
@@ -1152,6 +1148,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
