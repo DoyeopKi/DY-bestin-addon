@@ -76,15 +76,19 @@ const DEVICE_INFO = [
     {
         device: "thermostat", header: "02210901", length: 14, request: "set",
         setPropertyToMsg: (buf, rom, idx, val) => {
-            // 방 번호를 헥사값으로 변환하여 5번째 바이트에 넣습니다.
-            buf[4] = parseInt(rom, 16);
+            // 도엽님 댁 패킷 규격: 방 번호는 index 5에 위치합니다.
+            buf[5] = parseInt(rom, 10); 
+
             if (idx === "power") {
-                buf[5] = (val === "heat" ? 0x01 : 0x02);
+                // 전원 제어: 9번째 바이트(index 8)에 전원 비트(0x40)와 온도를 합쳐서 보냅니다.
+                // 켜짐(heat)이면 0x40을 더하고, 꺼짐이면 온도값만 보냅니다.
+                let targetTemp = 23; // 기본 온도 설정
+                buf[8] = (val === "heat") ? (0x40 | targetTemp) : targetTemp;
             } else {
-                // 온도를 8번째와 9번째 바이트 등에 적절히 배치 (패킷 분석에 따라 조정 필요)
-                buf[8] = parseInt(val);
-                buf[9] = parseInt(val);
+                // 온도 조절: 9번째 바이트(index 8)에 설정 온도를 직접 넣습니다.
+                buf[8] = parseInt(val, 10);
             }
+            // 마지막 체크섬은 하단 공통 함수에서 자동으로 계산됩니다.
             return buf;
         }
     },
@@ -1143,5 +1147,6 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
