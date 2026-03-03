@@ -82,7 +82,7 @@ const DEVICE_INFO = [
 
             if (idx === "power") {
                 // 도엽님 규격: 00은 ON(heat), 02는 OFF입니다.
-                buf[6] = (val === "heat" ? 0x00 : 0x02);
+                buf[6] = (val === "heat" ? 0x02 : 0x00);
                 buf[7] = 23; // 전원 조작 시 기본 온도 23도 설정
             } else {
                 // 온도 조절
@@ -1154,6 +1154,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
