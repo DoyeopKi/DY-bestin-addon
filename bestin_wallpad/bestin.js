@@ -161,19 +161,20 @@ const DEVICE_INFO = [
     },
 
   
-   // THERMOSTAT (STATE)
+// THERMOSTAT (STATE)
     {
-        // 도엽님 패킷의 헤더인 02210E81, 02210E90, 02210E92를 모두 허용합니다.
-        device: "thermostat", header: ["02210E81", "02210E90", "02210E92"], length: 14, request: "ack",
+        // 02210E90 패킷만 개별 방 난방 상태 패킷입니다.
+        device: "thermostat", header: ["02210E90"], length: 14, request: "ack",
         parseToProperty: (buf) => {
-            // buf[4]에 위치한 방 번호를 헥사 문자열(ea, eb 등)로 읽어옵니다.
-            let roomId = buf[4].toString(16); 
-            // buf[8]은 현재 온도, buf[9]는 설정 온도입니다.
-            let currentTemp = buf[8]; 
-            let targetTemp = buf[9];
-            
-            // 설정 온도가 0보다 크면 '난방 중(heat)', 아니면 '꺼짐(off)'으로 간주합니다.
-            let powerState = (targetTemp > 0 && targetTemp <= 40) ? "heat" : "off";
+            // buf[6]이 진짜 방 번호입니다 (예: 1, 2, 5 등)
+            let roomId = buf[6].toString(); 
+
+            // buf[8]은 [난방 켜짐/꺼짐 비트(0x40)] + [설정 온도] 로 이루어져 있습니다.
+            let targetTemp = buf[8] & 0x3F; // 0x3F(63)을 & 연산하여 온도 숫자만 추출
+            let powerState = (buf[8] & 0x40) ? "heat" : "off"; // 0x40(64) 비트가 있으면 난방 켜짐
+
+            // buf[9]는 현재 온도입니다.
+            let currentTemp = buf[9];
 
             return {
                 device: "thermostat", room: roomId,
@@ -1142,4 +1143,5 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
