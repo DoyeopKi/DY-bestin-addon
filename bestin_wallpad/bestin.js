@@ -78,15 +78,15 @@ const DEVICE_INFO = [
         setPropertyToMsg: (buf, rom, idx, val, cache) => {
             buf[5] = parseInt(rom, 10); 
 
-            // 캐시에서 현재 방의 전원과 설정 온도를 가져옵니다. (없으면 기본값 off, 23도)
-            const currentPower = cache ? (cache["thermostat" + rom + "power"] || "off") : "off";
-            const currentTemp = cache ? (cache["thermostat" + rom + "target"] || 23) : 23;
+            // HA가 기억하고 있는 현재 전원과 온도 상태를 불러옵니다. (기본값: off, 23도)
+            const currentPower = (cache && cache["thermostat" + rom + "power"]) ? cache["thermostat" + rom + "power"] : "off";
+            const currentTemp = (cache && cache["thermostat" + rom + "target"]) ? cache["thermostat" + rom + "target"] : 23;
 
             if (idx === "power") {
-                buf[6] = (val === "heat" ? 0x00 : 0x02); // 00: ON, 02: OFF
-                buf[7] = currentTemp; // 전원을 켜고 끌 때, 기존 설정 온도를 그대로 유지
+                buf[6] = (val === "heat" ? 0x00 : 0x02); 
+                buf[7] = currentTemp; // 전원을 조절할 땐 기존 설정 온도를 그대로 유지!
             } else {
-                buf[6] = (currentPower === "heat" ? 0x00 : 0x02); // 온도를 조절할 때, 기존 전원 상태 유지
+                buf[6] = (currentPower === "heat" ? 0x00 : 0x02); // 온도를 조절할 땐 기존 전원 상태를 유지!
                 buf[7] = parseInt(val, 10); 
             }
             return buf;
@@ -758,11 +758,14 @@ class BestinRS485 {
     }
 
  
-    createCommandBuffer(headerBuffer, restBuffer, deviceInfo, room, name, value) {
+        createCommandBuffer(headerBuffer, restBuffer, deviceInfo, room, name, value) {
         const commandBuffer = Buffer.concat([headerBuffer, restBuffer]);
-        // this.deviceStatusCache 를 추가로 전달합니다.
+        // this.deviceStatusCache 를 추가로 전달하여 현재 상태를 파악하게 합니다.
         deviceInfo.setPropertyToMsg(commandBuffer, room, name, value, this.deviceStatusCache);
-        return commandBuffer;
+        
+        // 패킷 길이가 9바이트를 넘지 않도록 강제로 잘라냅니다.
+        const devInfoLength = Array.isArray(deviceInfo.length) ? deviceInfo.length[this.setCommandBufferIndex] : deviceInfo.length;
+        return commandBuffer.slice(0, devInfoLength);
     }
 
     updatePropertyValues(device, room, name, value, force) {
@@ -1148,6 +1151,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
