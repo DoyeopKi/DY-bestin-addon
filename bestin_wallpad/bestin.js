@@ -72,22 +72,20 @@ const DEVICE_INFO = [
         }
     },
 
-// THERMOSTAT (COMMAND)
+// THERMOSTAT (COMMAND) - 전원(01)과 온도(02) 명령을 분리합니다.
     {
-        // 도엽님 로그에 따라 길이를 9로, 헤더를 02210901로 설정합니다.
         device: "thermostat", header: "02210901", length: 9, request: "set",
         setPropertyToMsg: (buf, rom, idx, val) => {
-            // buf[4]는 타임스탬프(카운터)가 자동으로 들어갑니다.
-            buf[5] = parseInt(rom, 10); // 방 번호 (5)
+            buf[5] = parseInt(rom, 10); // 방 번호
 
             if (idx === "power") {
-                // 도엽님 규격: 00은 ON(heat), 02는 OFF입니다.
-                buf[6] = (val === "heat" ? 0x02 : 0x00);
-                buf[7] = 23; // 전원 조작 시 기본 온도 23도 설정
+                // 전원 제어 명령: 타입은 01, 값은 ON(01) 또는 OFF(00)
+                buf[6] = 0x01; 
+                buf[7] = (val === "heat" ? 0x01 : 0x00); 
             } else {
-                // 온도 조절
-                buf[6] = 0x00; // 온도 조절 시 전원은 ON으로 유지
-                buf[7] = parseInt(val, 10); // 목표 온도
+                // 온도 조절 명령: 타입은 02, 값은 온도 숫자
+                buf[6] = 0x02; 
+                buf[7] = parseInt(val, 10); 
             }
             return buf;
         }
@@ -1154,6 +1152,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
