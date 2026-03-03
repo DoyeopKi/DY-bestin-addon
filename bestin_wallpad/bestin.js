@@ -92,6 +92,8 @@ const DEVICE_INFO = [
             return buf;
         }
     },
+
+    
     // FAN
     {
         device: "fan", header: "026100", length: 10, request: "set",
@@ -164,16 +166,33 @@ const DEVICE_INFO = [
     },
 
   
-// THERMOSTAT (STATE)
+// THERMOSTAT (STATE/ACK)
     {
-        device: "thermostat", header: ["02210E81", "02210E90", "02210E92"], length: 14, request: "ack",
+        // 02210E90(정기 보고)과 02210E81(명령 응답) 헤더를 모두 수용합니다.
+        device: "thermostat", header: ["02210E81", "02210E90"], length: 14, request: "ack",
         parseToProperty: (buf) => {
+            // 도엽님 로그 분석 결과: 방 번호는 index 6에 있습니다.
+            const roomId = buf[6].toString(); 
+
+            // 전원 상태: index 7이 00이면 ON, 02이면 OFF입니다.
+            const powerState = (buf[7] === 0x00) ? "heat" : "off";
+
+            // 현재 온도: index 8에 있습니다. 
+            // 단, 난방이 켜져 있을 때는 온도 값에 0x40(64)이 더해져서 옵니다 (예: 23도 -> 57 hex).
+            let currentTemp = buf[8];
+            if (currentTemp >= 0x40) {
+                currentTemp -= 0x40; // 0x40 비트마스크 제거하여 순수 온도 추출
+            }
+
+            // 목표 온도: index 9에 있습니다.
+            const targetTemp = buf[9];
+
             return {
-                device: "thermostat", room: buf[6].toString(), // 방 번호 위치 index 6
+                device: "thermostat", room: roomId,
                 value: { 
-                    "power": (buf[7] === 0) ? "heat" : "off", // 전원 상태 index 7
-                    "current": buf[8], // 현재 온도 index 8
-                    "target": buf[9]   // 목표 온도 index 9
+                    "power": powerState, 
+                    "current": currentTemp, 
+                    "target": targetTemp 
                 }
             };
         }
@@ -1135,6 +1154,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
