@@ -771,10 +771,9 @@ class BestinRS485 {
  
         createCommandBuffer(headerBuffer, restBuffer, deviceInfo, room, name, value) {
         const commandBuffer = Buffer.concat([headerBuffer, restBuffer]);
-        // this.deviceStatusCache 를 추가로 전달하여 현재 상태를 파악하게 합니다.
+        // 반드시 this.deviceStatusCache를 인자로 넘겨줘야 위에서 값을 읽을 수 있습니다.
         deviceInfo.setPropertyToMsg(commandBuffer, room, name, value, this.deviceStatusCache);
         
-        // 패킷 길이가 9바이트를 넘지 않도록 강제로 잘라냅니다.
         const devInfoLength = Array.isArray(deviceInfo.length) ? deviceInfo.length[this.setCommandBufferIndex] : deviceInfo.length;
         return commandBuffer.slice(0, devInfoLength);
     }
@@ -1162,6 +1161,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
