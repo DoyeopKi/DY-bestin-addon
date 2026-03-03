@@ -72,27 +72,38 @@ const DEVICE_INFO = [
         }
     },
 
-// THERMOSTAT (COMMAND)
-    {
-        device: "thermostat", header: "02210901", length: 9, request: "set",
-        setPropertyToMsg: (buf, rom, idx, val, cache) => {
-            buf[5] = parseInt(rom, 10); 
+// THERMOSTAT (COMMAND) 섹션 수정
+{
+    device: "thermostat", header: "02210901", length: 9, request: "set",
+    setPropertyToMsg: (buf, rom, idx, val, cache) => {
+        buf[5] = parseInt(rom, 10); 
 
-            // HA가 기억하고 있는 현재 전원과 온도 상태를 불러옵니다. (기본값: off, 23도)
-            const currentPower = (cache && cache["thermostat" + rom + "power"]) ? cache["thermostat" + rom + "power"] : "off";
-            const currentTemp = (cache && cache["thermostat" + rom + "target"]) ? cache["thermostat" + rom + "target"] : 23;
+        // 캐시가 없으면 기본값 대신 현재 상태를 최대한 활용
+        const roomKeyPower = "thermostat" + rom + "power";
+        const roomKeyTarget = "thermostat" + rom + "target";
+        
+        const currentPower = (cache && cache[roomKeyPower]) ? cache[roomKeyPower] : "off";
+        const currentTarget = (cache && cache[roomKeyTarget]) ? cache[roomKeyTarget] : 23;
 
-            if (idx === "power") {
-                buf[6] = (val === "heat" ? 0x00 : 0x02); 
-                buf[7] = currentTemp; // 전원을 조절할 땐 기존 설정 온도를 그대로 유지!
-            } else {
-                buf[6] = (currentPower === "heat" ? 0x00 : 0x02); // 온도를 조절할 땐 기존 전원 상태를 유지!
-                buf[7] = parseInt(val, 10); 
-            }
-            return buf;
+        if (idx === "power") {
+            // 전원 조작 시: 00(ON), 02(OFF)
+            buf[6] = (val === "heat" ? 0x00 : 0x02);
+            buf[7] = Math.floor(currentTarget); // 정수 부분 먼저 전송
+            // [참고] 만약 0.5도가 buf[8]을 사용한다면 여기에 로직이 추가되어야 합니다.
+        } else {
+            // 온도 조작 시: 기존 전원 상태 유지
+            buf[6] = (currentPower === "heat" ? 0x00 : 0x02);
+            
+            const targetTemp = parseFloat(val);
+            buf[7] = Math.floor(targetTemp); // 정수부
+            
+            // 0.5도 처리 예시 (월패드 규격 확인 필요)
+            // 보통 9바이트 패킷의 마지막 전(buf[8])은 체크섬 자리라 공간이 부족할 수 있습니다.
+            // 일단은 정수로 보내서 ACK가 오는지 확인해야 합니다.
         }
-    },
-    
+        return buf;
+    }
+},
     // FAN
     {
         device: "fan", header: "026100", length: 10, request: "set",
@@ -1151,6 +1162,7 @@ class BestinRS485 {
 
 
 new BestinRS485();
+
 
 
 
